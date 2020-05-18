@@ -219,7 +219,7 @@ void read_from_cq(struct submitter *s) {
         if (fi->file_sz % BLOCK_SZ) blocks++;
 
         for (int i = 0; i < blocks; i++)
-            output_to_console(fi->iovecs->iov_base, fi->iovecs[i].iov_len);
+            output_to_console(fi->iovecs[i].iov_base, fi->iovecs[i].iov_len);
 
         head++;
     } while (1);
@@ -255,7 +255,7 @@ int submit_to_sq(char *file_path, struct submitter *s) {
     if (file_sz % BLOCK_SZ) blocks++;
     printf("File size: %ld blocks: %d\n", file_sz, blocks);
 
-    fi = malloc(sizeof(*fi));
+    fi = malloc(sizeof(*fi) + sizeof(struct iovec) * blocks);
     if (!fi) {
         fprintf(stderr, "Unable to allocate memory\n");
         return 1;
