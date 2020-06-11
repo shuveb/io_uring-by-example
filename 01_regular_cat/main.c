@@ -96,6 +96,7 @@ int read_and_print_file(char *file_name) {
     for (int i = 0; i < blocks; i++)
         output_to_console(iovecs[i].iov_base, iovecs[i].iov_len);
 
+    free(iovecs);
     return 0;
 }
 
