@@ -107,7 +107,7 @@ int app_setup_uring(struct submitter *s) {
     struct app_io_sq_ring *sring = &s->sq_ring;
     struct app_io_cq_ring *cring = &s->cq_ring;
     struct io_uring_params p;
-    void *ptr;
+    void *sq_ptr, *cq_ptr;
 
     /*
      * We need to pass in the io_uring_params structure to the io_uring_setup()
@@ -128,22 +128,52 @@ int app_setup_uring(struct submitter *s) {
      * well.
      * */
 
+    int sring_sz = p.sq_off.array + p.sq_entries * sizeof(unsigned);
+    int cring_sz = p.cq_off.cqes + p.cq_entries * sizeof(struct io_uring_cqe);
+
+    /* In kernel version 5.4 and above, it is possible to map the submission and 
+     * completion buffers with a single mmap() call. Rather than check for kernel 
+     * versions, the recommended way is to just check the features field of the 
+     * io_uring_params structure, which is a bit mask. If the 
+     * IORING_FEAT_SINGLE_MMAP is set, then we can do away with the second mmap()
+     * call to map the completion ring.
+     * */
+    if (p.features & IORING_FEAT_SINGLE_MMAP) {
+        if (cring_sz > sring_sz) {
+            sring_sz = cring_sz;
+        }
+        cring_sz = sring_sz;
+    }
+
     /* Map in the submission queue ring buffer */
-    ptr = mmap(0, p.sq_off.array + p.sq_entries * sizeof(__u32),
-            PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE,
+    sq_ptr = mmap(0, sring_sz, PROT_READ | PROT_WRITE, 
+            MAP_SHARED | MAP_POPULATE,
             s->ring_fd, IORING_OFF_SQ_RING);
-    if (ptr == MAP_FAILED) {
+    if (sq_ptr == MAP_FAILED) {
         perror("mmap");
         return 1;
     }
+
+    if (p.features & IORING_FEAT_SINGLE_MMAP) {
+        cq_ptr = sq_ptr;
+    } else {
+        /* Map in the completion queue ring buffer */
+        cq_ptr = mmap(0, cring_sz, PROT_READ | PROT_WRITE, 
+                MAP_SHARED | MAP_POPULATE,
+                s->ring_fd, IORING_OFF_CQ_RING);
+        if (cq_ptr == MAP_FAILED) {
+            perror("mmap");
+            return 1;
+        }
+    }
     /* Save useful fields in a global app_io_sq_ring struct for later
      * easy reference */
-    sring->head = ptr + p.sq_off.head;
-    sring->tail = ptr + p.sq_off.tail;
-    sring->ring_mask = ptr + p.sq_off.ring_mask;
-    sring->ring_entries = ptr + p.sq_off.ring_entries;
-    sring->flags = ptr + p.sq_off.flags;
-    sring->array = ptr + p.sq_off.array;
+    sring->head = sq_ptr + p.sq_off.head;
+    sring->tail = sq_ptr + p.sq_off.tail;
+    sring->ring_mask = sq_ptr + p.sq_off.ring_mask;
+    sring->ring_entries = sq_ptr + p.sq_off.ring_entries;
+    sring->flags = sq_ptr + p.sq_off.flags;
+    sring->array = sq_ptr + p.sq_off.array;
 
     /* Map in the submission queue entries array */
     s->sqes = mmap(0, p.sq_entries * sizeof(struct io_uring_sqe),
@@ -154,22 +184,13 @@ int app_setup_uring(struct submitter *s) {
         return 1;
     }
 
-    /* Map in the completion queue ring buffer */
-    ptr = mmap(0,
-            p.cq_off.cqes + p.cq_entries * sizeof(struct io_uring_cqe),
-            PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE,
-            s->ring_fd, IORING_OFF_CQ_RING);
-    if (ptr == MAP_FAILED) {
-        perror("mmap");
-        return 1;
-    }
     /* Save useful fields in a global app_io_cq_ring struct for later
      * easy reference */
-    cring->head = ptr + p.cq_off.head;
-    cring->tail = ptr + p.cq_off.tail;
-    cring->ring_mask = ptr + p.cq_off.ring_mask;
-    cring->ring_entries = ptr + p.cq_off.ring_entries;
-    cring->cqes = ptr + p.cq_off.cqes;
+    cring->head = cq_ptr + p.cq_off.head;
+    cring->tail = cq_ptr + p.cq_off.tail;
+    cring->ring_mask = cq_ptr + p.cq_off.ring_mask;
+    cring->ring_entries = cq_ptr + p.cq_off.ring_entries;
+    cring->cqes = cq_ptr + p.cq_off.cqes;
 
     return 0;
 }
@@ -211,7 +232,6 @@ void read_from_cq(struct submitter *s) {
         /* Get the entry */
         cqe = &cring->cqes[head & *s->cq_ring.ring_mask];
         fi = (struct file_info*) cqe->user_data;
-        printf("res=%d\n", cqe->res);
         if (cqe->res < 0)
             fprintf(stderr, "Error: %s\n", strerror(abs(cqe->res)));
 
@@ -253,7 +273,6 @@ int submit_to_sq(char *file_path, struct submitter *s) {
     off_t bytes_remaining = file_sz;
     int blocks = (int) file_sz / BLOCK_SZ;
     if (file_sz % BLOCK_SZ) blocks++;
-    printf("File size: %ld blocks: %d\n", file_sz, blocks);
 
     fi = malloc(sizeof(*fi) + sizeof(struct iovec) * blocks);
     if (!fi) {
@@ -286,8 +305,6 @@ int submit_to_sq(char *file_path, struct submitter *s) {
         current_block++;
         bytes_remaining -= bytes_to_read;
     }
-
-    printf("Total number of iovec blocks: %d\n", current_block);
 
     /* Add our submission queue entry to the tail of the SQE ring buffer */
     next_tail = tail = *sring->tail;
