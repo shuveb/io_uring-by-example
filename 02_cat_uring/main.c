@@ -145,7 +145,9 @@ int app_setup_uring(struct submitter *s) {
         cring_sz = sring_sz;
     }
 
-    /* Map in the submission queue ring buffer */
+    /* Map in the submission and completion queue ring buffers.
+     * Older kernels only map in the submission queue, though.
+     * */
     sq_ptr = mmap(0, sring_sz, PROT_READ | PROT_WRITE, 
             MAP_SHARED | MAP_POPULATE,
             s->ring_fd, IORING_OFF_SQ_RING);
@@ -157,7 +159,7 @@ int app_setup_uring(struct submitter *s) {
     if (p.features & IORING_FEAT_SINGLE_MMAP) {
         cq_ptr = sq_ptr;
     } else {
-        /* Map in the completion queue ring buffer */
+        /* Map in the completion queue ring buffer in older kernels separately */
         cq_ptr = mmap(0, cring_sz, PROT_READ | PROT_WRITE, 
                 MAP_SHARED | MAP_POPULATE,
                 s->ring_fd, IORING_OFF_CQ_RING);
@@ -266,7 +268,6 @@ int submit_to_sq(char *file_path, struct submitter *s) {
     struct app_io_sq_ring *sring = &s->sq_ring;
     unsigned index = 0, current_block = 0, tail = 0, next_tail = 0;
 
-    off_t offset = 0;
     off_t file_sz = get_file_size(file_fd);
     if (file_sz < 0)
         return 1;
@@ -292,7 +293,6 @@ int submit_to_sq(char *file_path, struct submitter *s) {
         if (bytes_to_read > BLOCK_SZ)
             bytes_to_read = BLOCK_SZ;
 
-        offset += bytes_to_read;
         fi->iovecs[current_block].iov_len = bytes_to_read;
 
         void *buf;
@@ -329,7 +329,7 @@ int submit_to_sq(char *file_path, struct submitter *s) {
     }
 
     /*
-     * Tell the kernel we have submitted events with the io_uring_enter() system'
+     * Tell the kernel we have submitted events with the io_uring_enter() system
      * call. We also pass in the IOURING_ENTER_GETEVENTS flag which causes the
      * io_uring_enter() call to wait until min_complete events (the 3rd param)
      * complete.
