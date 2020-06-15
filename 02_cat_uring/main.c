@@ -122,10 +122,10 @@ int app_setup_uring(struct submitter *s) {
     }
 
     /*
-     * io_uring communication happens via 2 shared kernel-user space ring
-     * buffers. While the completion queue is directly manipulated, the
-     * submission queue has an indirection array in between. We map that in as
-     * well.
+     * io_uring communication happens via 2 shared kernel-user space ring buffers,
+     * which can be jointly mapped with a single mmap() call in recent kernels. 
+     * While the completion queue is directly manipulated, the submission queue 
+     * has an indirection array in between. We map that in as well.
      * */
 
     int sring_sz = p.sq_off.array + p.sq_entries * sizeof(unsigned);
