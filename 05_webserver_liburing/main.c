@@ -392,9 +392,9 @@ void server_loop(int server_socket) {
 
     while (1) {
         int ret = io_uring_wait_cqe(&ring, &cqe);
-        struct request *req = (struct request *) cqe->user_data;
         if (ret < 0)
             fatal_error("io_uring_wait_cqe");
+        struct request *req = (struct request *) cqe->user_data;
         if (cqe->res < 0) {
             fprintf(stderr, "Async request failed: %s for event: %d\n",
                     strerror(-cqe->res), req->event_type);
