@@ -202,7 +202,7 @@ void copy_file_contents(char *file_path, off_t file_size, struct iovec *iov) {
     char *buf = zh_malloc(file_size);
     fd = open(file_path, O_RDONLY);
     if (fd < 0)
-        fatal_error("read");
+        fatal_error("open");
 
     /* We should really check for short reads here */
     int ret = read(fd, buf, file_size);
