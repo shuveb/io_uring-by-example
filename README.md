@@ -1,5 +1,5 @@
 # io_uring By Example
-This repository is a companion repo for the article series io_uring By Exmaple on the [Unixism blog](https://unixism.net).
+This repository is a companion repo for the article series io_uring By Example on the [Unixism blog](https://unixism.net).
 
 It features a set of example programs that serve as an example to illustrate the usage of Linux's io_uring subsystem. The examples build one on top of the other, becoming progressively complex.
 
