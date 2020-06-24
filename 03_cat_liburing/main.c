@@ -94,11 +94,6 @@ int submit_read_request(char *file_path, struct io_uring *ring) {
     if (file_sz % BLOCK_SZ) blocks++;
     struct file_info *fi = malloc(sizeof(*fi) +
                                           (sizeof(struct iovec) * blocks));
-    char *buff = malloc(file_sz);
-    if (!buff) {
-        fprintf(stderr, "Unable to allocate memory.\n");
-        return 1;
-    }
 
     /*
      * For each block of the file we need to read, we allocate an iovec struct
