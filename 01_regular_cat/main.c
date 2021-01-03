@@ -35,13 +35,11 @@ off_t get_file_size(int fd) {
 
 /*
  * Output a string of characters of len length to stdout.
- * We use buffered output here to be efficient,
- * since we need to output character-by-character.
+ * We use buffered output here to be efficient, e.g.
+ * when printing one or more small buffers.
  * */
-void output_to_console(char *buf, int len) {
-    while (len--) {
-        fputc(*buf++, stdout);
-    }
+void output_to_console(const char *buf, size_t len) {
+    fwrite(buf, 1, len, stdout);
 }
 
 int read_and_print_file(char *file_name) {
