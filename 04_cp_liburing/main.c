@@ -193,10 +193,10 @@ int copy_file(struct io_uring *ring, off_t insize) {
 
             if (data->read) {
                 queue_write(ring, data);
-                write_left -= data->first_len;
                 reads--;
                 writes++;
             } else {
+                write_left -= data->first_len;
                 free(data);
                 writes--;
             }
