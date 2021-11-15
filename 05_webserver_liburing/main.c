@@ -1,13 +1,11 @@
 #include <stdio.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <ctype.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <signal.h>
 #include <liburing.h>
-#include <sys/stat.h>
+#include <netinet/in.h>
 #include <fcntl.h>
+#include <ctype.h>
+#include <unistd.h> 
+#include <string.h>
+#include <stdlib.h>
 
 #define SERVER_STRING           "Server: zerohttpd/0.1\r\n"
 #define DEFAULT_SERVER_PORT     8000
@@ -161,7 +159,7 @@ int add_write_request(struct request *req) {
     return 0;
 }
 
-void _send_static_string_content(const char *str, int client_socket) {
+void sendStaticStringContent(const char *str, int client_socket) {
     struct request *req = zh_malloc(sizeof(*req) + sizeof(struct iovec));
     unsigned long slen = strlen(str);
     req->iovec_count = 1;
@@ -178,7 +176,7 @@ void _send_static_string_content(const char *str, int client_socket) {
  * */
 
 void handle_unimplemented_method(int client_socket) {
-    _send_static_string_content(unimplemented_content, client_socket);
+    sendStaticStringContent(unimplemented_content, client_socket);
 }
 
 /*
@@ -187,7 +185,7 @@ void handle_unimplemented_method(int client_socket) {
  * */
 
 void handle_http_404(int client_socket) {
-    _send_static_string_content(http_404_content, client_socket);
+    sendStaticStringContent(http_404_content, client_socket);
 }
 
 /*
@@ -205,8 +203,8 @@ void copy_file_contents(char *file_path, off_t file_size, struct iovec *iov) {
         fatal_error("open");
 
     /* We should really check for short reads here */
-    int ret = read(fd, buf, file_size);
-    if (ret < file_size) {
+    ssize_t i = read(fd, buf, file_size);
+    if (i < file_size) {
         fprintf(stderr, "Encountered a short read.\n");
     }
     close(fd);
