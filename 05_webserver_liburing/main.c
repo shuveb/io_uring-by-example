@@ -239,7 +239,7 @@ void send_headers(const char *path, off_t len, struct iovec *iov) {
     strcpy(small_case_path, path);
     strtolower(small_case_path);
 
-    char *str = "HTTP/1.0 200 OK\r\n";
+    char *str = "HTTP/1.1 200 OK\r\n";
     unsigned long slen = strlen(str);
     iov[0].iov_base = zh_malloc(slen);
     iov[0].iov_len = slen;
@@ -287,15 +287,22 @@ void send_headers(const char *path, off_t len, struct iovec *iov) {
     iov[3].iov_len = slen;
     memcpy(iov[3].iov_base, send_buffer, slen);
 
+    /* Send the connection header. */
+    sprintf(send_buffer, "connection: %s\r\n", "keep-alive");
+    slen = strlen(send_buffer);
+    iov[4].iov_base = zh_malloc(slen);
+    iov[4].iov_len = slen;
+    memcpy(iov[4].iov_base, send_buffer, slen);
+
     /*
      * When the browser sees a '\r\n' sequence in a line on its own,
      * it understands there are no more headers. Content may follow.
      * */
     strcpy(send_buffer, "\r\n");
     slen = strlen(send_buffer);
-    iov[4].iov_base = zh_malloc(slen);
-    iov[4].iov_len = slen;
-    memcpy(iov[4].iov_base, send_buffer, slen);
+    iov[5].iov_base = zh_malloc(slen);
+    iov[5].iov_len = slen;
+    memcpy(iov[5].iov_base, send_buffer, slen);
 }
 
 void handle_get_method(char *path, int client_socket) {
@@ -325,11 +332,11 @@ void handle_get_method(char *path, int client_socket) {
     else {
         /* Check if this is a normal/regular file and not a directory or something else */
         if (S_ISREG(path_stat.st_mode)) {
-            struct request *req = zh_malloc(sizeof(*req) + (sizeof(struct iovec) * 6));
-            req->iovec_count = 6;
+            struct request *req = zh_malloc(sizeof(*req) + (sizeof(struct iovec) * 7));
+            req->iovec_count = 7;
             req->client_socket = client_socket;
             send_headers(final_path, path_stat.st_size, req->iov);
-            copy_file_contents(final_path, path_stat.st_size, &req->iov[5]);
+            copy_file_contents(final_path, path_stat.st_size, &req->iov[6]);
             printf("200 %s %ld bytes\n", final_path, path_stat.st_size);
             add_write_request( req);
         }
@@ -409,6 +416,7 @@ void server_loop(int server_socket) {
                 break;
             case EVENT_TYPE_READ:
                 if (!cqe->res) {
+                    close(req->client_socket);
                     fprintf(stderr, "Empty request!\n");
                     break;
                 }
@@ -417,10 +425,10 @@ void server_loop(int server_socket) {
                 free(req);
                 break;
             case EVENT_TYPE_WRITE:
+                add_read_request(req->client_socket);
                 for (int i = 0; i < req->iovec_count; i++) {
                     free(req->iov[i].iov_base);
                 }
-                close(req->client_socket);
                 free(req);
                 break;
         }
