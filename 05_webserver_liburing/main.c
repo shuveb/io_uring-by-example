@@ -3,7 +3,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <ctype.h>
-#include <unistd.h> 
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -52,6 +52,32 @@ const char *http_404_content = \
         "<p>Your client is asking for an object that was not found on this server.</p>"
         "</body>"
         "</html>";
+
+const   uint32_t suf[]= {
+        ('jpg'),
+        ('jpeg'),
+        ('png'),
+        ('gif'),
+        ('htm'),
+        ('html'),
+        ('js'),
+        ('css'),
+        ('txt'),
+        0
+};
+
+const char *ctype[]= {
+        "Content-Type: image/jpeg\r\n",
+        "Content-Type: image/jpeg\r\n",
+        "Content-Type: image/png\r\n",
+        "Content-Type: image/gif\r\n",
+        "Content-Type: text/html\r\n",
+        "Content-Type: text/html\r\n",
+        "Content-Type: application/javascript\r\n",
+        "Content-Type: text/css\r\n",
+        "Content-Type: text/plain\r\n",
+        "Content-Type: application/octet-stream\r\n"
+} ;
 
 /*
  * Utility function to convert a string to lower case.
@@ -254,26 +280,18 @@ void send_headers(const char *path, off_t len, struct iovec *iov) {
      * Since extensions can be mixed case like JPG, jpg or Jpg,
      * we turn the extension into lower case before checking.
      * */
-    const char *file_ext = get_filename_ext(small_case_path);
-    if (strcmp("jpg", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: image/jpeg\r\n");
-    if (strcmp("jpeg", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: image/jpeg\r\n");
-    if (strcmp("png", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: image/png\r\n");
-    if (strcmp("gif", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: image/gif\r\n");
-    if (strcmp("htm", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: text/html\r\n");
-    if (strcmp("html", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: text/html\r\n");
-    if (strcmp("js", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: application/javascript\r\n");
-    if (strcmp("css", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: text/css\r\n");
-    if (strcmp("txt", file_ext) == 0)
-        strcpy(send_buffer, "Content-Type: text/plain\r\n");
-    slen = strlen(send_buffer);
+
+    u_int32_t  ext =0L;
+    strncpy((char *) &ext, get_filename_ext(small_case_path),sizeof (uint32_t));
+
+    int i=0;
+    const int the_end = (int) (sizeof(suf) / sizeof(suf[0]));
+    for (i = 0; i < the_end; ++i)
+        if (ext == suf[i])
+            break;
+    slen = strlen(ctype[i] );
+    strncpy(send_buffer,ctype[i],slen);
+
     iov[2].iov_base = zh_malloc(slen);
     iov[2].iov_len = slen;
     memcpy(iov[2].iov_base, send_buffer, slen);
